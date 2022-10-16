@@ -9,7 +9,8 @@ conprsnt=true
 if [ ! -f con ]; then
     conprsnt=false
     echo con binary does not exist, downloading...
-    curl -L 'https://raw.githubusercontent.com/abe1242/sockshare/master/con' -o con
+    curl -L 'https://raw.githubusercontent.com/abe1242/sockshare/master/con' \
+        -o con
 fi
 chmod +x con
 
@@ -32,7 +33,9 @@ if [ $OSTYPE == 'linux-android' ]; then
     if dpkg-query -s python >/dev/null 2>/dev/null; then
         echo python3 is installed
     else
-        pkg upgrade -y
+        apt upgrade -y \
+            -o Dpkg::Options::="--force-confdef" \
+            -o Dpkg::Options::="--force-confold"
         pkg install python3 -y
     fi
 
