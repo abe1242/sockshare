@@ -7,6 +7,9 @@ import os
 import socket
 from tqdm import tqdm
 
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 ##########
 # SERVER #
 ##########
@@ -20,8 +23,8 @@ def snd(filename, port):
 
     s.listen()
     
-    print(f"Server listening on {host} at port {port}")
-    print("---------------------")
+    eprint(f"Server listening on {host} at port {port}")
+    eprint("---------------------")
 
     # Print ip addresses for interfaces if system is posix
     if os.name == "posix":
@@ -41,7 +44,7 @@ def snd(filename, port):
                 if i[1] == "lo":
                     continue
 
-                print(f"{i[1]:<5} - {get_ip_address(i[1])}")
+                eprint(f"{i[1]:<5} - {get_ip_address(i[1])}")
             except OSError:
                 continue
 
@@ -54,7 +57,7 @@ def snd(filename, port):
 
     while True:
         conn, addr = s.accept()
-        print(f"\nConnection from {addr}")
+        eprint(f"\nConnection from {addr}")
 
         try:
             # Send filename length, filesize and filename
@@ -68,7 +71,7 @@ def snd(filename, port):
                     break
             fbyte = int.from_bytes(fbyte, "big")
         except ConnectionResetError:
-            print("Connection was reset.")
+            eprint("Connection was reset.")
             conn.close()
             continue
 
@@ -84,18 +87,18 @@ def snd(filename, port):
                 try:
                     conn.send(data)
                 except ConnectionResetError:
-                    print("Connection was reset. File transfer aborted!")
+                    eprint("Connection was reset. File transfer aborted!")
                     break
                 sentbytes += len(data)
                 pbar.update(len(data))
 
             pbar.close()
             if sentbytes == filesize:
-                print(f"Sent the file '{os.path.basename(filename)}' successfully")
+                eprint(f"Sent the file '{os.path.basename(filename)}' successfully")
             else:
-                print(f"File sent partially")
+                eprint(f"File sent partially")
 
-        print()
+        eprint()
         conn.close()
 
     s.close()
@@ -117,7 +120,6 @@ def rec(host, port, cntinue, outfile=None):
         if len(fname_len) == 3:
             break
     fname_len = int(fname_len)
-    print(f": filename length recieved ({fname_len})")
 
     # Get file size
     fsize = ""
@@ -129,7 +131,6 @@ def rec(host, port, cntinue, outfile=None):
         if len(fsize) == 13:
             break
     fsize = int(fsize)
-    print(f": filesize recieved ({fsize})")
 
     # Get the filename
     fname = b""
@@ -141,14 +142,13 @@ def rec(host, port, cntinue, outfile=None):
         if len(fname) == fname_len:
             break
     fname = fname.decode("utf-8")
-    print(f": filename recieved ({fname})")
 
     if not outfile:
         outfile = fname
 
     if os.path.isfile(outfile) and not cntinue:
-        print("File exists but resume option is not specified!")
-        print("Overwriting...")
+        eprint("File exists but resume option is not specified!")
+        eprint("Overwriting...")
 
     # Send the byte offset to download from
     fopen_mode = "wb"
@@ -170,16 +170,16 @@ def rec(host, port, cntinue, outfile=None):
             pbar.update(len(data))
             f.write(data)
         if size == fsize:
-            print(f"Successfully downloaded '{outfile}'")
+            eprint(f"Successfully downloaded '{outfile}'")
         else:
-            print(f"Download of file '{outfile}' incomplete")
+            eprint(f"Download of file '{outfile}' incomplete")
         
         pbar.close()
 
     s.close()
 
 def sig_handle(sig, frame):
-    print("Exiting program...")
+    eprint("Exiting program...")
     sys.exit(0)
 
 
@@ -188,17 +188,17 @@ signal.signal(signal.SIGINT, sig_handle)
 
 # ARGSPARSE
 parser = argparse.ArgumentParser()
+parser.add_argument('-p', '--port', type=int, default=8888)
+
 subparsers = parser.add_subparsers(dest="role", required=True)
 
 send = subparsers.add_parser('send')
 send.add_argument('filename')
-send.add_argument('-p', '--port', type=int, default=8888)
 
 recv = subparsers.add_parser('recv')
 recv.add_argument('host')
 recv.add_argument('-o', '--output', default=None)
 recv.add_argument('-c', '--continue', action="store_true", dest="cntinue")
-recv.add_argument('-p', '--port', type=int, default=8888)
 
 args = parser.parse_args(sys.argv[1:])
 
@@ -206,4 +206,5 @@ if args.role == "send":
     snd(filename=args.filename, port=args.port)
 
 if args.role == "recv":
-    rec(host=args.host, port=args.port, outfile=args.output, cntinue=args.cntinue)
+    rec(host=args.host, port=args.port,
+        outfile=args.output, cntinue=args.cntinue)
