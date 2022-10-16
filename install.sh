@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-curl -L 'https://bit.ly/3T6LW75' -o con
+curl -L 'https://raw.githubusercontent.com/abe1242/sockshare/master/con' -o con
 chmod +x con
 mkdir -p ~/.local/bin
 echo 'PATH=$PATH:$HOME/.local/bin' >> .profile
