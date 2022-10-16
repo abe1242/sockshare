@@ -53,17 +53,23 @@ def snd(filename, port):
 
     while True:
         conn, addr = s.accept()
-        print(f"Connection from {addr}")
+        print(f"\nConnection from {addr}")
 
-        # Send filename size followed by filename
-        conn.send(fname_len + fsize_byte + fname_byte)
+        try:
+            # Send filename length, filesize and filename
+            conn.send(fname_len + fsize_byte + fname_byte)
 
-        fbyte = b''
-        while True:
-            fbyte += conn.recv(1)
-            if len(fbyte) == 8:
-                break
-        fbyte = int.from_bytes(fbyte, "big")
+            # Get byte offset to read the file from
+            fbyte = b''
+            while True:
+                fbyte += conn.recv(1)
+                if len(fbyte) == 8:
+                    break
+            fbyte = int.from_bytes(fbyte, "big")
+        except ConnectionResetError:
+            print("Connection was reset.")
+            conn.close()
+            continue
 
         # Send the actual file
         with open(filename, "rb") as f:
