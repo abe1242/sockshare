@@ -10,7 +10,7 @@ mv con ~/.local/bin/
 
 if [ $OSTYPE == 'linux-android' ]; then
     if ! dpkg-query -s python 2>/dev/null; then
-        pkg update
+        pkg upgrade -y
         pkg install python3 -y
     fi
 
