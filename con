@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+
+import argparse
+import sys
+import os
+import socket
+from tqdm import tqdm
+
+##########
+# SERVER #
+##########
+def snd(filename, port):
+    host = "0.0.0.0"
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    s.bind((host, port))
+
+    s.listen()
+    
+    print(f"Server listening on {host} at port {port}")
+    print("---------------------")
+
+    # Print ip addresses for interfaces if system is posix
+    if os.name == "posix":
+        import fcntl
+        import struct
+        def get_ip_address(ifname):
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            addr = fcntl.ioctl(
+                s.fileno(),
+                0x8915,
+                struct.pack('256s', bytes(ifname[:15], 'utf-8'))
+                )[20:24]
+            return socket.inet_ntoa(addr)
+
+        for i in reversed(socket.if_nameindex()):
+            try:
+                if i[1] == "lo":
+                    continue
+
+                print(f"{i[1]:<5} - {get_ip_address(i[1])}")
+            except OSError:
+                continue
+
+
+    filesize = os.stat(filename).st_size
+    fsize_byte = f"{filesize:013d}".encode("utf-8")
+    fname_base = os.path.basename(filename)
+    fname_byte = fname_base.encode("utf-8")
+    fname_len = f"{len(fname_byte):03d}".encode("utf-8")
+
+    while True:
+        conn, addr = s.accept()
+        print(f"Connection from {addr}")
+
+        # Send filename size followed by filename
+        conn.send(fname_len + fsize_byte + fname_byte)
+
+        # Send the actual file
+        with open(filename, "rb") as f:
+            sentbytes = 0
+            pbar = tqdm(total=filesize, unit='iB', unit_scale=True)
+            while True:
+                data = f.read(1024)
+                if not data:
+                    break
+                try:
+                    conn.send(data)
+                except ConnectionResetError:
+                    print("Connection was reset. File transfer aborted!")
+                    break
+                sentbytes += len(data)
+                pbar.update(len(data))
+
+            pbar.close()
+            if sentbytes == filesize:
+                print(f"Sent the file '{os.path.basename(filename)}' successfully")
+            else:
+                print(f"File sent partially")
+
+        print()
+        conn.close()
+
+    s.close()
+
+##########
+# CLIENT #
+##########
+def rec(host, port, outfile=None):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host, port))
+
+    # Get filename length
+    fname_len = ""
+    while True:
+        data = s.recv(1)
+        if not data:
+            break
+        fname_len += data.decode("utf-8")
+        if len(fname_len) == 3:
+            break
+    fname_len = int(fname_len)
+    print(f": filename length recieved ({fname_len})")
+
+    # Get file size
+    fsize = ""
+    while True:
+        data = s.recv(1)
+        if not data:
+            break
+        fsize += data.decode("utf-8")
+        if len(fsize) == 13:
+            break
+    fsize = int(fsize)
+    print(f": filesize recieved ({fsize})")
+
+    # Get the filename
+    fname = b""
+    while True:
+        data = s.recv(1)
+        if not data:
+            break
+        fname += data
+        if len(fname) == fname_len:
+            break
+    fname = fname.decode("utf-8")
+    print(f": filename recieved ({fname})")
+    
+    if not outfile:
+        outfile = fname
+
+    # Get the data and write it to a file
+    with open(outfile, "wb") as f:
+        size = 0
+        pbar = tqdm(total=fsize, unit='iB', unit_scale=True)
+        while True:
+            data = s.recv(1024)
+            if not data:
+                break
+            size += len(data)
+            pbar.update(len(data))
+            f.write(data)
+        if size == fsize:
+            print(f"Successfully downloaded '{outfile}'")
+        else:
+            print(f"Download of file '{outfile}' incomplete")
+        
+        pbar.close()
+
+    s.close()
+
+# ARGSPARSE
+parser = argparse.ArgumentParser()
+subparsers = parser.add_subparsers(dest="role", required=True)
+
+send = subparsers.add_parser('send')
+send.add_argument('filename')
+send.add_argument('-p', '--port', type=int, default=8888)
+
+recv = subparsers.add_parser('recv')
+recv.add_argument('host')
+recv.add_argument('-o', '--output', default=None)
+recv.add_argument('-p', '--port', type=int, default=8888)
+
+args = parser.parse_args(sys.argv[1:])
+
+if args.role == "send":
+    snd(filename=args.filename, port=args.port)
+
+if args.role == "recv":
+    rec(host=args.host, port=args.port, outfile=args.output)
