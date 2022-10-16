@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+import signal
 import os
 import socket
 from tqdm import tqdm
@@ -176,6 +177,14 @@ def rec(host, port, cntinue, outfile=None):
         pbar.close()
 
     s.close()
+
+def sig_handle(sig, frame):
+    print("Exiting program...")
+    sys.exit(0)
+
+
+# Program execution starts here
+signal.signal(signal.SIGINT, sig_handle)
 
 # ARGSPARSE
 parser = argparse.ArgumentParser()
