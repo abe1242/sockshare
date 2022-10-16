@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-echo hye
-
 curl -L 'https://raw.githubusercontent.com/abe1242/sockshare/master/con' -o con
 chmod +x con
 mkdir -p ~/.local/bin
