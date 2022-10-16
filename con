@@ -58,10 +58,18 @@ def snd(filename, port):
         # Send filename size followed by filename
         conn.send(fname_len + fsize_byte + fname_byte)
 
+        fbyte = b''
+        while True:
+            fbyte += conn.recv(1)
+            if len(fbyte) == 8:
+                break
+        fbyte = int.from_bytes(fbyte, "big")
+
         # Send the actual file
         with open(filename, "rb") as f:
-            sentbytes = 0
-            pbar = tqdm(total=filesize, unit='iB', unit_scale=True)
+            f.seek(fbyte)
+            sentbytes = fbyte
+            pbar = tqdm(initial=sentbytes, total=filesize, unit='iB', unit_divisor=1024, unit_scale=True)
             while True:
                 data = f.read(1024)
                 if not data:
@@ -88,7 +96,7 @@ def snd(filename, port):
 ##########
 # CLIENT #
 ##########
-def rec(host, port, outfile=None):
+def rec(host, port, cntinue, outfile=None):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
 
@@ -127,14 +135,26 @@ def rec(host, port, outfile=None):
             break
     fname = fname.decode("utf-8")
     print(f": filename recieved ({fname})")
-    
+
     if not outfile:
         outfile = fname
 
+    if os.path.isfile(outfile) and not cntinue:
+        print("File exists but resume option is not specified!")
+        print("Overwriting...")
+
+    # Send the byte offset to download from
+    fopen_mode = "wb"
+    fbyte = 0
+    if cntinue and os.path.isfile(outfile):
+        fopen_mode = "a+b"
+        fbyte = os.stat(outfile).st_size
+    s.send(fbyte.to_bytes(8, "big"))
+
     # Get the data and write it to a file
-    with open(outfile, "wb") as f:
-        size = 0
-        pbar = tqdm(total=fsize, unit='iB', unit_scale=True)
+    with open(outfile, fopen_mode) as f:
+        size = fbyte
+        pbar = tqdm(initial=size, total=fsize, unit='iB', unit_divisor=1024, unit_scale=True)
         while True:
             data = s.recv(1024)
             if not data:
@@ -162,6 +182,7 @@ send.add_argument('-p', '--port', type=int, default=8888)
 recv = subparsers.add_parser('recv')
 recv.add_argument('host')
 recv.add_argument('-o', '--output', default=None)
+recv.add_argument('-c', '--continue', action="store_true", dest="cntinue")
 recv.add_argument('-p', '--port', type=int, default=8888)
 
 args = parser.parse_args(sys.argv[1:])
@@ -170,4 +191,4 @@ if args.role == "send":
     snd(filename=args.filename, port=args.port)
 
 if args.role == "recv":
-    rec(host=args.host, port=args.port, outfile=args.output)
+    rec(host=args.host, port=args.port, outfile=args.output, cntinue=args.cntinue)
