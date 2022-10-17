@@ -45,6 +45,10 @@ if [ $OSTYPE == 'linux-android' ]; then
         pip3 install tqdm
     fi
 else
+    if ! pip3 --version; then
+        sudo apt install python3-pip
+    fi
+
     if ! pip3 show tqdm; then
         sudo pip3 install tqdm
     fi
